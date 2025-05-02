@@ -1,0 +1,15 @@
+{
+  "name": "smartface",
+  "version": "1.0.0",
+  "description": "Aplicación de verificación de identidad con Azure Face API",
+  "main": "index.js",
+  "scripts": {
+    "start": "netlify dev"
+  },
+  "dependencies": {
+    "node-fetch": "^2.6.7"
+  },
+  "devDependencies": {
+    "netlify-cli": "^12.0.0"
+  }
+}

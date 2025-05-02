@@ -235,7 +235,7 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.append('selfie_image', selfieImageFile);
         
         // Enviar solicitud al servidor
-        fetch('/detect', {
+        fetch('/.netlify/functions/api/detect', {
             method: 'POST',
             body: formData
         })
