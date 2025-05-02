@@ -119,10 +119,13 @@ def detect_face(image_file):
         'Content-Type': 'application/octet-stream'
     }
     
+    # Solicitar atributos específicos que nos ayudarán en la comparación
     params = {
-        'returnFaceId': 'false',  # No solicitar ID para evitar restricciones
-        'returnFaceLandmarks': 'false',
-        'detectionModel': 'detection_03'  # Usar el modelo más reciente
+        'returnFaceId': 'true',  # Necesitamos el faceId para referencia
+        'returnFaceLandmarks': 'true',  # Solicitar landmarks para mejor comparación
+        'detectionModel': 'detection_03',  # Modelo más preciso
+        'recognitionModel': 'recognition_04',  # Modelo de reconocimiento más reciente
+        'returnFaceAttributes': 'headPose,qualityForRecognition'  # Atributos útiles para comparación
     }
     
     try:
@@ -148,7 +151,9 @@ def detect_face(image_file):
         response.raise_for_status()
         
         faces = response.json()
+        print(f"Detected {len(faces)} faces")
         if faces and len(faces) > 0:
+            print(f"Face details: {faces[0]}")
             return faces[0]  # Devolver la información del primer rostro detectado
         return None
     except Exception as e:
@@ -158,10 +163,91 @@ def detect_face(image_file):
 def compare_faces(face1, face2):
     """
     Comparar rostros utilizando datos de Azure Face API
-    Como no podemos usar la API de verificación directamente (requiere aprobación),
-    hacemos una comparación más estricta de los rectángulos faciales y otras características
+    Implementamos una comparación más avanzada utilizando landmarks faciales y otros atributos
     """
     try:
+        # Verificar si tenemos landmarks faciales para una comparación más precisa
+        if 'faceLandmarks' in face1 and 'faceLandmarks' in face2:
+            landmarks1 = face1.get('faceLandmarks', {})
+            landmarks2 = face2.get('faceLandmarks', {})
+            
+            # Calcular similitud basada en landmarks faciales
+            if landmarks1 and landmarks2:
+                # 1. Calcular distancia entre puntos clave (ojos, nariz, boca)
+                key_points1 = [
+                    (landmarks1.get('pupilLeft', {}).get('x', 0), landmarks1.get('pupilLeft', {}).get('y', 0)),
+                    (landmarks1.get('pupilRight', {}).get('x', 0), landmarks1.get('pupilRight', {}).get('y', 0)),
+                    (landmarks1.get('noseTip', {}).get('x', 0), landmarks1.get('noseTip', {}).get('y', 0)),
+                    (landmarks1.get('mouthLeft', {}).get('x', 0), landmarks1.get('mouthLeft', {}).get('y', 0)),
+                    (landmarks1.get('mouthRight', {}).get('x', 0), landmarks1.get('mouthRight', {}).get('y', 0))
+                ]
+                
+                key_points2 = [
+                    (landmarks2.get('pupilLeft', {}).get('x', 0), landmarks2.get('pupilLeft', {}).get('y', 0)),
+                    (landmarks2.get('pupilRight', {}).get('x', 0), landmarks2.get('pupilRight', {}).get('y', 0)),
+                    (landmarks2.get('noseTip', {}).get('x', 0), landmarks2.get('noseTip', {}).get('y', 0)),
+                    (landmarks2.get('mouthLeft', {}).get('x', 0), landmarks2.get('mouthLeft', {}).get('y', 0)),
+                    (landmarks2.get('mouthRight', {}).get('x', 0), landmarks2.get('mouthRight', {}).get('y', 0))
+                ]
+                
+                # 2. Normalizar las coordenadas para que sean independientes del tamaño de la imagen
+                # Calcular el centro de la cara y la escala para cada conjunto de puntos
+                def normalize_points(points):
+                    # Encontrar el centro
+                    x_coords = [p[0] for p in points]
+                    y_coords = [p[1] for p in points]
+                    center_x = sum(x_coords) / len(x_coords)
+                    center_y = sum(y_coords) / len(y_coords)
+                    
+                    # Calcular la escala (distancia promedio desde el centro)
+                    distances = [((p[0] - center_x)**2 + (p[1] - center_y)**2)**0.5 for p in points]
+                    scale = sum(distances) / len(distances)
+                    
+                    # Normalizar los puntos
+                    return [((p[0] - center_x) / scale, (p[1] - center_y) / scale) for p in points]
+                
+                norm_points1 = normalize_points(key_points1)
+                norm_points2 = normalize_points(key_points2)
+                
+                # 3. Calcular la similitud como la distancia euclidiana promedio entre puntos correspondientes
+                distances = [((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)**0.5 for p1, p2 in zip(norm_points1, norm_points2)]
+                avg_distance = sum(distances) / len(distances)
+                
+                # Convertir distancia a similitud (menor distancia = mayor similitud)
+                landmark_similarity = max(0, 1 - avg_distance)
+                
+                # Verificar la calidad para reconocimiento si está disponible
+                quality_similarity = 1.0
+                if 'faceAttributes' in face1 and 'faceAttributes' in face2:
+                    quality1 = face1.get('faceAttributes', {}).get('qualityForRecognition', 'medium')
+                    quality2 = face2.get('faceAttributes', {}).get('qualityForRecognition', 'medium')
+                    
+                    # Penalizar si alguna de las imágenes tiene baja calidad
+                    if quality1 == 'low' or quality2 == 'low':
+                        quality_similarity = 0.7
+                    
+                # Calcular la similitud final
+                similarity_score = landmark_similarity * 0.8 + quality_similarity * 0.2
+                
+                # Aplicar umbrales equilibrados
+                is_same_person = similarity_score > 0.7
+                verified = similarity_score > 0.8
+                
+                print(f"Face comparison details (landmark-based):")
+                print(f"- Landmark similarity: {landmark_similarity:.4f}")
+                print(f"- Quality similarity: {quality_similarity:.4f}")
+                print(f"- Overall similarity score: {similarity_score:.4f}")
+                print(f"- Is same person: {is_same_person}")
+                print(f"- Verified: {verified}")
+                
+                return {
+                    'isIdentical': is_same_person,
+                    'confidence': similarity_score,
+                    'verified': verified,
+                    'message': 'Esta es una verificación basada en landmarks faciales detectados por Azure Face API. Para una verificación más precisa se requiere acceso a las funciones avanzadas de verificación facial de Azure.'
+                }
+        
+        # Si no tenemos landmarks, caemos en el método de rectángulos faciales
         # Obtener los rectángulos faciales
         rect1 = face1.get('faceRectangle', {})
         rect2 = face2.get('faceRectangle', {})
@@ -183,25 +269,15 @@ def compare_faces(face1, face2):
         size_ratio = min(size1, size2) / max(size1, size2)
         size_similarity = size_ratio  # Penaliza diferencias grandes de tamaño
         
-        # 3. Posición relativa de los ojos (si está disponible)
-        position_similarity = 1.0
-        if 'faceLandmarks' in face1 and 'faceLandmarks' in face2:
-            landmarks1 = face1.get('faceLandmarks', {})
-            landmarks2 = face2.get('faceLandmarks', {})
-            
-            # Si tenemos puntos de referencia, usarlos para una comparación más precisa
-            if landmarks1 and landmarks2:
-                position_similarity = 0.8  # Valor por defecto si no podemos calcular
-        
         # Combinar factores con diferentes pesos
         # Damos más importancia a la proporción facial
         similarity_score = (proportion_similarity * 0.6) + (size_similarity * 0.4)
         
-        # Aplicar umbrales más equilibrados
+        # Aplicar umbrales equilibrados
         is_same_person = similarity_score > 0.75  # Bajamos de 0.85 a 0.75
         verified = similarity_score > 0.82  # Bajamos de 0.92 a 0.82
         
-        print(f"Face comparison details:")
+        print(f"Face comparison details (rectangle-based):")
         print(f"- Proportion similarity: {proportion_similarity:.4f}")
         print(f"- Size similarity: {size_similarity:.4f}")
         print(f"- Overall similarity score: {similarity_score:.4f}")

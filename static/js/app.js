@@ -559,11 +559,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 const blob = new Blob(byteArrays, {type: 'image/jpeg'});
                 
-                // Parámetros para la solicitud
+                // Parámetros para la solicitud, actualizados según la documentación
                 const params = new URLSearchParams({
-                    'returnFaceId': 'false',
-                    'returnFaceLandmarks': 'false',
-                    'detectionModel': 'detection_03'
+                    'returnFaceId': 'true',  // Necesitamos el faceId para referencia
+                    'returnFaceLandmarks': 'true',  // Solicitar landmarks para mejor comparación
+                    'detectionModel': 'detection_03',  // Modelo más preciso
+                    'recognitionModel': 'recognition_04',  // Modelo de reconocimiento más reciente
+                    'returnFaceAttributes': 'headPose,qualityForRecognition'  // Atributos útiles para comparación
                 });
                 
                 console.log(`Sending request to ${config.faceEndpoint}face/v1.0/detect with ${blob.size} bytes`);
@@ -591,6 +593,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(faces => {
                     console.log(`Detected ${faces.length} faces`);
                     if (faces && faces.length > 0) {
+                        console.log(`Face details:`, faces[0]);
                         return faces[0]; // Devolver el primer rostro detectado
                     }
                     return null;
@@ -599,9 +602,101 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Función para comparar dos rostros
             function compareFaces(face1, face2) {
-                // Como no podemos usar la API de verificación directamente (requiere aprobación),
-                // hacemos una comparación más estricta de los rectángulos faciales y otras características
+                // Implementamos una comparación más avanzada utilizando landmarks faciales y otros atributos
                 try {
+                    // Verificar si tenemos landmarks faciales para una comparación más precisa
+                    if (face1.faceLandmarks && face2.faceLandmarks) {
+                        const landmarks1 = face1.faceLandmarks;
+                        const landmarks2 = face2.faceLandmarks;
+                        
+                        // Calcular similitud basada en landmarks faciales
+                        if (landmarks1 && landmarks2) {
+                            // 1. Calcular distancia entre puntos clave (ojos, nariz, boca)
+                            const keyPoints1 = [
+                                [landmarks1.pupilLeft?.x || 0, landmarks1.pupilLeft?.y || 0],
+                                [landmarks1.pupilRight?.x || 0, landmarks1.pupilRight?.y || 0],
+                                [landmarks1.noseTip?.x || 0, landmarks1.noseTip?.y || 0],
+                                [landmarks1.mouthLeft?.x || 0, landmarks1.mouthLeft?.y || 0],
+                                [landmarks1.mouthRight?.x || 0, landmarks1.mouthRight?.y || 0]
+                            ];
+                            
+                            const keyPoints2 = [
+                                [landmarks2.pupilLeft?.x || 0, landmarks2.pupilLeft?.y || 0],
+                                [landmarks2.pupilRight?.x || 0, landmarks2.pupilRight?.y || 0],
+                                [landmarks2.noseTip?.x || 0, landmarks2.noseTip?.y || 0],
+                                [landmarks2.mouthLeft?.x || 0, landmarks2.mouthLeft?.y || 0],
+                                [landmarks2.mouthRight?.x || 0, landmarks2.mouthRight?.y || 0]
+                            ];
+                            
+                            // 2. Normalizar las coordenadas para que sean independientes del tamaño de la imagen
+                            // Calcular el centro de la cara y la escala para cada conjunto de puntos
+                            function normalizePoints(points) {
+                                // Encontrar el centro
+                                const xCoords = points.map(p => p[0]);
+                                const yCoords = points.map(p => p[1]);
+                                const centerX = xCoords.reduce((sum, x) => sum + x, 0) / xCoords.length;
+                                const centerY = yCoords.reduce((sum, y) => sum + y, 0) / yCoords.length;
+                                
+                                // Calcular la escala (distancia promedio desde el centro)
+                                const distances = points.map(p => 
+                                    Math.sqrt(Math.pow(p[0] - centerX, 2) + Math.pow(p[1] - centerY, 2))
+                                );
+                                const scale = distances.reduce((sum, d) => sum + d, 0) / distances.length;
+                                
+                                // Normalizar los puntos
+                                return points.map(p => [(p[0] - centerX) / scale, (p[1] - centerY) / scale]);
+                            }
+                            
+                            const normPoints1 = normalizePoints(keyPoints1);
+                            const normPoints2 = normalizePoints(keyPoints2);
+                            
+                            // 3. Calcular la similitud como la distancia euclidiana promedio entre puntos correspondientes
+                            const distances = normPoints1.map((p1, i) => {
+                                const p2 = normPoints2[i];
+                                return Math.sqrt(Math.pow(p1[0] - p2[0], 2) + Math.pow(p1[1] - p2[1], 2));
+                            });
+                            
+                            const avgDistance = distances.reduce((sum, d) => sum + d, 0) / distances.length;
+                            
+                            // Convertir distancia a similitud (menor distancia = mayor similitud)
+                            const landmarkSimilarity = Math.max(0, 1 - avgDistance);
+                            
+                            // Verificar la calidad para reconocimiento si está disponible
+                            let qualitySimilarity = 1.0;
+                            if (face1.faceAttributes && face2.faceAttributes) {
+                                const quality1 = face1.faceAttributes.qualityForRecognition || 'medium';
+                                const quality2 = face2.faceAttributes.qualityForRecognition || 'medium';
+                                
+                                // Penalizar si alguna de las imágenes tiene baja calidad
+                                if (quality1 === 'low' || quality2 === 'low') {
+                                    qualitySimilarity = 0.7;
+                                }
+                            }
+                            
+                            // Calcular la similitud final
+                            const similarityScore = landmarkSimilarity * 0.8 + qualitySimilarity * 0.2;
+                            
+                            // Aplicar umbrales equilibrados
+                            const isIdentical = similarityScore > 0.7;
+                            const verified = similarityScore > 0.8;
+                            
+                            console.log("Face comparison details (landmark-based):");
+                            console.log(`- Landmark similarity: ${landmarkSimilarity.toFixed(4)}`);
+                            console.log(`- Quality similarity: ${qualitySimilarity.toFixed(4)}`);
+                            console.log(`- Overall similarity score: ${similarityScore.toFixed(4)}`);
+                            console.log(`- Is same person: ${isIdentical}`);
+                            console.log(`- Verified: ${verified}`);
+                            
+                            return {
+                                isIdentical: isIdentical,
+                                confidence: similarityScore,
+                                verified: verified,
+                                message: 'Esta es una verificación basada en landmarks faciales detectados por Azure Face API. Para una verificación más precisa se requiere acceso a las funciones avanzadas de verificación facial de Azure.'
+                            };
+                        }
+                    }
+                    
+                    // Si no tenemos landmarks, caemos en el método de rectángulos faciales
                     // Obtener los rectángulos faciales
                     const rect1 = face1.faceRectangle;
                     const rect2 = face2.faceRectangle;
@@ -623,27 +718,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     const sizeRatio = Math.min(size1, size2) / Math.max(size1, size2);
                     const sizeSimilarity = sizeRatio; // Penaliza diferencias grandes de tamaño
                     
-                    // 3. Posición relativa de los ojos (si está disponible)
-                    let positionSimilarity = 1.0;
-                    if (face1.faceLandmarks && face2.faceLandmarks) {
-                        const landmarks1 = face1.faceLandmarks;
-                        const landmarks2 = face2.faceLandmarks;
-                        
-                        // Si tenemos puntos de referencia, usarlos para una comparación más precisa
-                        if (landmarks1 && landmarks2) {
-                            positionSimilarity = 0.8; // Valor por defecto si no podemos calcular
-                        }
-                    }
-                    
                     // Combinar factores con diferentes pesos
                     // Damos más importancia a la proporción facial
                     const similarityScore = (proportionSimilarity * 0.6) + (sizeSimilarity * 0.4);
                     
-                    // Aplicar umbrales más equilibrados
+                    // Aplicar umbrales equilibrados
                     const isIdentical = similarityScore > 0.75; // Bajamos de 0.85 a 0.75
                     const verified = similarityScore > 0.82; // Bajamos de 0.92 a 0.82
                     
-                    console.log("Face comparison details:");
+                    console.log("Face comparison details (rectangle-based):");
                     console.log(`- Proportion similarity: ${proportionSimilarity.toFixed(4)}`);
                     console.log(`- Size similarity: ${sizeSimilarity.toFixed(4)}`);
                     console.log(`- Overall similarity score: ${similarityScore.toFixed(4)}`);
