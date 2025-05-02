@@ -1,8 +1,15 @@
 [build]
   publish = "static"
-  command = "echo 'No build command needed for static site'"
+  command = "echo 'Static site, no build needed'"
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+
+[build.environment]
+  NODE_VERSION = "16"
+
+# Desactivar la instalación automática de dependencias de Python
+[build.processing]
+  skip_processing = true
