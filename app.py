@@ -122,13 +122,29 @@ def detect_face(image_file):
     params = {
         'returnFaceId': 'false',  # No solicitar ID para evitar restricciones
         'returnFaceLandmarks': 'false',
-        'returnFaceAttributes': '',  # No solicitar atributos faciales
         'detectionModel': 'detection_03'  # Usar el modelo más reciente
     }
     
     try:
+        # Asegurarnos de que estamos al inicio del archivo
+        image_file.seek(0)
         image_data = image_file.read()
+        
+        # Verificar que tenemos datos de imagen
+        if not image_data:
+            print("Error: No image data")
+            return None
+            
+        print(f"Sending request to {FACE_DETECT_URL} with {len(image_data)} bytes")
         response = requests.post(FACE_DETECT_URL, params=params, headers=headers, data=image_data)
+        
+        # Imprimir información de depuración
+        print(f"Response status: {response.status_code}")
+        print(f"Response headers: {response.headers}")
+        
+        if response.status_code != 200:
+            print(f"Error response: {response.text}")
+            
         response.raise_for_status()
         
         faces = response.json()

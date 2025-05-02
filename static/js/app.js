@@ -559,10 +559,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 const blob = new Blob(byteArrays, {type: 'image/jpeg'});
                 
-                // Crear FormData para enviar la imagen
-                const formData = new FormData();
-                formData.append('image', blob);
-                
                 // Parámetros para la solicitud
                 const params = new URLSearchParams({
                     'returnFaceId': 'false',
@@ -570,21 +566,30 @@ document.addEventListener('DOMContentLoaded', function() {
                     'detectionModel': 'detection_03'
                 });
                 
+                console.log(`Sending request to ${config.faceEndpoint}face/v1.0/detect with ${blob.size} bytes`);
+                
                 // Llamar a la API de Azure Face
                 return fetch(`${config.faceEndpoint}face/v1.0/detect?${params}`, {
                     method: 'POST',
                     headers: {
-                        'Ocp-Apim-Subscription-Key': config.faceApiKey
+                        'Ocp-Apim-Subscription-Key': config.faceApiKey,
+                        'Content-Type': 'application/octet-stream'
                     },
                     body: blob
                 })
                 .then(response => {
+                    console.log(`Response status: ${response.status}`);
+                    
                     if (!response.ok) {
-                        throw new Error(`Error en la API: ${response.status} ${response.statusText}`);
+                        return response.text().then(text => {
+                            console.error(`Error response: ${text}`);
+                            throw new Error(`Error en la API: ${response.status} ${response.statusText}`);
+                        });
                     }
                     return response.json();
                 })
                 .then(faces => {
+                    console.log(`Detected ${faces.length} faces`);
                     if (faces && faces.length > 0) {
                         return faces[0]; // Devolver el primer rostro detectado
                     }
