@@ -666,8 +666,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             const avgDistance = distances.reduce((sum, d) => sum + d, 0) / distances.length;
                             
                             // Convertir distancia a similitud (menor distancia = mayor similitud)
-                            // Aplicar una función exponencial para penalizar más las diferencias
-                            const landmarkSimilarity = Math.max(0, 1 - (avgDistance * 2));
+                            // Aplicar una función exponencial para penalizar más las diferencias pero no tan estricta
+                            const landmarkSimilarity = Math.max(0, 1 - (avgDistance * 1.5));
                             
                             // Verificar la orientación de la cabeza si está disponible
                             let headPoseSimilarity = 1.0;
@@ -681,17 +681,17 @@ document.addEventListener('DOMContentLoaded', function() {
                                     const pitchDiff = Math.abs(headPose1.pitch - headPose2.pitch);
                                     const rollDiff = Math.abs(headPose1.roll - headPose2.roll);
                                     
-                                    // Penalizar si hay diferencias grandes en la orientación
-                                    headPoseSimilarity = Math.max(0, 1 - (yawDiff + pitchDiff + rollDiff) / 60);
+                                    // Penalizar si hay diferencias grandes en la orientación, pero no tan estricto
+                                    headPoseSimilarity = Math.max(0, 1 - (yawDiff + pitchDiff + rollDiff) / 75);
                                 }
                             }
                             
                             // Calcular la similitud final
                             const similarityScore = landmarkSimilarity * 0.8 + headPoseSimilarity * 0.2;
                             
-                            // Aplicar umbrales mucho más estrictos
-                            const isIdentical = similarityScore > 0.85;  // Aumentado de 0.7 a 0.85
-                            const verified = similarityScore > 0.92;  // Aumentado de 0.8 a 0.92
+                            // Aplicar umbrales según lo solicitado
+                            const isIdentical = similarityScore > 0.80;  // Umbral para isIdentical
+                            const verified = similarityScore > 0.90;  // Umbral para verified
                             
                             console.log("Face comparison details (landmark-based):");
                             console.log(`- Landmark similarity: ${landmarkSimilarity.toFixed(4)}`);
@@ -718,12 +718,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     const ratio1 = rect1.width / Math.max(rect1.height, 1);
                     const ratio2 = rect2.width / Math.max(rect2.height, 1);
                     
-                    // Calcular la diferencia de proporciones (más estricta)
+                    // Calcular la diferencia de proporciones (menos estricta)
                     const ratioDiff = Math.abs(ratio1 - ratio2);
                     
                     // Calcular puntuación de similitud basada en múltiples factores
-                    // 1. Similitud de proporción facial (más estricta)
-                    const proportionSimilarity = Math.max(0, 1 - (ratioDiff * 3)); // Más sensible a diferencias
+                    // 1. Similitud de proporción facial (menos estricta)
+                    const proportionSimilarity = Math.max(0, 1 - (ratioDiff * 2)); // Menos sensible a diferencias
                     
                     // 2. Diferencia en el tamaño relativo de los rostros
                     const size1 = rect1.width * rect1.height;
@@ -735,9 +735,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Damos más importancia a la proporción facial
                     const similarityScore = (proportionSimilarity * 0.7) + (sizeSimilarity * 0.3);
                     
-                    // Aplicar umbrales más estrictos
-                    const isIdentical = similarityScore > 0.85; // Aumentado de 0.75 a 0.85
-                    const verified = similarityScore > 0.92; // Aumentado de 0.82 a 0.92
+                    // Aplicar umbrales según lo solicitado
+                    const isIdentical = similarityScore > 0.80;  // Umbral para isIdentical
+                    const verified = similarityScore > 0.90;  // Umbral para verified
                     
                     console.log("Face comparison details (rectangle-based):");
                     console.log(`- Proportion similarity: ${proportionSimilarity.toFixed(4)}`);

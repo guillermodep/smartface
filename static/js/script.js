@@ -269,49 +269,46 @@ document.addEventListener('DOMContentLoaded', function() {
     function displayResults(data) {
         resultContainer.style.display = 'block';
         
-        if (data.error) {
-            displayError(data.error);
-            return;
-        }
+        // Extraer resultados de verificación e información de ID
+        const verificationResult = data.verification_result;
+        const idInfo = data.id_info;
         
-        const confidence = data.confidence ? (data.confidence * 100).toFixed(2) + '%' : 'N/A';
-        confidenceScore.textContent = confidence;
-        
-        if (data.verified) {
+        if (verificationResult.isIdentical) {
             resultAlert.className = 'alert alert-success';
             resultTitle.innerHTML = '<i class="fas fa-check-circle me-2"></i> Verificación Exitosa';
-            resultMessage.textContent = 'La identidad ha sido verificada correctamente.';
-        } else if (data.isIdentical) {
-            resultAlert.className = 'alert alert-warning';
-            resultTitle.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i> Verificación Parcial';
-            resultMessage.textContent = 'Las imágenes parecen ser de la misma persona, pero el nivel de confianza es bajo.';
+            
+            // Mostrar mensaje de verificación
+            let message = `La identidad ha sido verificada correctamente.<br><br>`;
+            
+            // Agregar información de la identificación
+            message += `<strong>Información del documento:</strong><br>`;
+            message += `<ul>`;
+            message += `<li><strong>Nombre:</strong> ${idInfo.nombre}</li>`;
+            message += `<li><strong>Apellido:</strong> ${idInfo.apellido}</li>`;
+            message += `<li><strong>Número de ID:</strong> ${idInfo.id_number}</li>`;
+            message += `</ul>`;
+            
+            // Agregar nota informativa si existe
+            if (idInfo.nota) {
+                message += `<small class="text-muted"><i>${idInfo.nota}</i></small><br><br>`;
+            } else {
+                message += `<br>`;
+            }
+            
+            // Agregar mensaje adicional
+            message += `${verificationResult.message}`;
+            
+            resultMessage.innerHTML = message;
         } else {
             resultAlert.className = 'alert alert-danger';
             resultTitle.innerHTML = '<i class="fas fa-times-circle me-2"></i> Verificación Fallida';
-            resultMessage.textContent = 'Las imágenes no parecen ser de la misma persona.';
+            resultMessage.innerHTML = 'Las imágenes no corresponden a la misma persona. Por favor, intente nuevamente.';
         }
         
-        // Mostrar mensaje adicional si existe
-        if (data.message) {
-            const messageElement = document.createElement('p');
-            messageElement.className = 'mt-2 small text-muted';
-            messageElement.textContent = data.message;
-            resultMessage.appendChild(messageElement);
-        }
-        
-        // Animar entrada de resultados
-        setTimeout(() => {
-            resultAlert.classList.add('animate-in');
-        }, 100);
-    }
-    
-    // Función para mostrar error
-    function displayError(message) {
-        resultContainer.style.display = 'block';
-        resultAlert.className = 'alert alert-danger';
-        resultTitle.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i> Error';
-        resultMessage.textContent = message;
-        document.getElementById('result-details').style.display = 'none';
+        // Mostrar puntuación de confianza
+        confidenceScore.style.display = 'block';
+        const percentage = Math.round(verificationResult.confidence * 100);
+        confidenceScore.innerHTML = `<i class="fas fa-chart-line me-2"></i> Confianza: ${percentage}%`;
         
         // Animar entrada de resultados
         setTimeout(() => {
