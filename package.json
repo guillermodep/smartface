@@ -7,7 +7,9 @@
     "start": "netlify dev"
   },
   "dependencies": {
-    "node-fetch": "^2.6.7"
+    "node-fetch": "^2.6.7",
+    "axios": "^1.3.4",
+    "buffer": "^6.0.3"
   },
   "devDependencies": {
     "netlify-cli": "^12.0.0"

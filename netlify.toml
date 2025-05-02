@@ -1,11 +1,10 @@
 [build]
-  command = "pip install -r requirements.txt"
+  command = "npm install"
   publish = "static"
 
 [build.environment]
-  PYTHON_VERSION = "3.9"
+  NODE_VERSION = "16"
 
-# Configuración para el backend de Python
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api/:splat"
@@ -15,7 +14,3 @@
   from = "/*"
   to = "/index.html"
   status = 200
-
-# Asegurarse de que las variables de entorno estén disponibles
-[context.production.environment]
-  FLASK_ENV = "production"
