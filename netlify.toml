@@ -1,9 +1,11 @@
 [build]
-  command = "npm install"
   publish = "static"
+  functions = "netlify/functions"
 
-[build.environment]
-  NODE_VERSION = "16"
+[dev]
+  functions = "netlify/functions"
+  publish = "static"
+  port = 8888
 
 [[redirects]]
   from = "/api/*"
