@@ -170,12 +170,12 @@ def compare_faces(face1, face2):
         ratio1 = rect1.get('width', 1) / max(rect1.get('height', 1), 1)
         ratio2 = rect2.get('width', 1) / max(rect2.get('height', 1), 1)
         
-        # Calcular la diferencia de proporciones (más estricta)
+        # Calcular la diferencia de proporciones (ajustada para ser más permisiva)
         ratio_diff = abs(ratio1 - ratio2)
         
         # Calcular puntuación de similitud basada en múltiples factores
-        # 1. Similitud de proporción facial
-        proportion_similarity = max(0, 1 - (ratio_diff * 2))  # Más sensible a diferencias
+        # 1. Similitud de proporción facial (más permisiva)
+        proportion_similarity = max(0, 1 - (ratio_diff * 1.5))  # Menos sensible a diferencias
         
         # 2. Diferencia en el tamaño relativo de los rostros
         size1 = rect1.get('width', 1) * rect1.get('height', 1)
@@ -197,9 +197,9 @@ def compare_faces(face1, face2):
         # Damos más importancia a la proporción facial
         similarity_score = (proportion_similarity * 0.6) + (size_similarity * 0.4)
         
-        # Aplicar umbrales más estrictos
-        is_same_person = similarity_score > 0.85  # Antes era 0.7
-        verified = similarity_score > 0.92  # Antes era 0.5
+        # Aplicar umbrales más equilibrados
+        is_same_person = similarity_score > 0.75  # Bajamos de 0.85 a 0.75
+        verified = similarity_score > 0.82  # Bajamos de 0.92 a 0.82
         
         print(f"Face comparison details:")
         print(f"- Proportion similarity: {proportion_similarity:.4f}")

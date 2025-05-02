@@ -610,12 +610,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     const ratio1 = rect1.width / Math.max(rect1.height, 1);
                     const ratio2 = rect2.width / Math.max(rect2.height, 1);
                     
-                    // Calcular la diferencia de proporciones (más estricta)
+                    // Calcular la diferencia de proporciones (ajustada para ser más permisiva)
                     const ratioDiff = Math.abs(ratio1 - ratio2);
                     
                     // Calcular puntuación de similitud basada en múltiples factores
-                    // 1. Similitud de proporción facial
-                    const proportionSimilarity = Math.max(0, 1 - (ratioDiff * 2)); // Más sensible a diferencias
+                    // 1. Similitud de proporción facial (más permisiva)
+                    const proportionSimilarity = Math.max(0, 1 - (ratioDiff * 1.5)); // Menos sensible a diferencias
                     
                     // 2. Diferencia en el tamaño relativo de los rostros
                     const size1 = rect1.width * rect1.height;
@@ -639,9 +639,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Damos más importancia a la proporción facial
                     const similarityScore = (proportionSimilarity * 0.6) + (sizeSimilarity * 0.4);
                     
-                    // Aplicar umbrales más estrictos
-                    const isIdentical = similarityScore > 0.85; // Antes era 0.5
-                    const verified = similarityScore > 0.92; // Antes era 0.7
+                    // Aplicar umbrales más equilibrados
+                    const isIdentical = similarityScore > 0.75; // Bajamos de 0.85 a 0.75
+                    const verified = similarityScore > 0.82; // Bajamos de 0.92 a 0.82
                     
                     console.log("Face comparison details:");
                     console.log(`- Proportion similarity: ${proportionSimilarity.toFixed(4)}`);
