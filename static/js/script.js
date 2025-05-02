@@ -234,8 +234,12 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.append('id_image', idImageFile);
         formData.append('selfie_image', selfieImageFile);
         
-        // Enviar solicitud al servidor
-        fetch('/.netlify/functions/api/detect', {
+        // Detectar si estamos en Netlify o en local
+        const apiUrl = window.location.hostname.includes('netlify.app') 
+            ? '/.netlify/functions/api/detect'  // URL para Netlify
+            : '/detect';                        // URL para local
+            
+        fetch(apiUrl, {
             method: 'POST',
             body: formData
         })
