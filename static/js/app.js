@@ -559,13 +559,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 const blob = new Blob(byteArrays, {type: 'image/jpeg'});
                 
-                // Parámetros para la solicitud, actualizados según la documentación
+                // Parámetros para la solicitud, actualizados para usar solo características básicas
                 const params = new URLSearchParams({
-                    'returnFaceId': 'true',  // Necesitamos el faceId para referencia
-                    'returnFaceLandmarks': 'true',  // Solicitar landmarks para mejor comparación
-                    'detectionModel': 'detection_03',  // Modelo más preciso
-                    'recognitionModel': 'recognition_04',  // Modelo de reconocimiento más reciente
-                    'returnFaceAttributes': 'headPose,qualityForRecognition'  // Atributos útiles para comparación
+                    'returnFaceId': 'false',
+                    'returnFaceLandmarks': 'true',
+                    'detectionModel': 'detection_03',
+                    'returnFaceAttributes': 'headPose'
                 });
                 
                 console.log(`Sending request to ${config.faceEndpoint}face/v1.0/detect with ${blob.size} bytes`);
@@ -617,7 +616,11 @@ document.addEventListener('DOMContentLoaded', function() {
                                 [landmarks1.pupilRight?.x || 0, landmarks1.pupilRight?.y || 0],
                                 [landmarks1.noseTip?.x || 0, landmarks1.noseTip?.y || 0],
                                 [landmarks1.mouthLeft?.x || 0, landmarks1.mouthLeft?.y || 0],
-                                [landmarks1.mouthRight?.x || 0, landmarks1.mouthRight?.y || 0]
+                                [landmarks1.mouthRight?.x || 0, landmarks1.mouthRight?.y || 0],
+                                [landmarks1.eyebrowLeftOuter?.x || 0, landmarks1.eyebrowLeftOuter?.y || 0],
+                                [landmarks1.eyebrowRightOuter?.x || 0, landmarks1.eyebrowRightOuter?.y || 0],
+                                [landmarks1.upperLipTop?.x || 0, landmarks1.upperLipTop?.y || 0],
+                                [landmarks1.underLipBottom?.x || 0, landmarks1.underLipBottom?.y || 0]
                             ];
                             
                             const keyPoints2 = [
@@ -625,7 +628,11 @@ document.addEventListener('DOMContentLoaded', function() {
                                 [landmarks2.pupilRight?.x || 0, landmarks2.pupilRight?.y || 0],
                                 [landmarks2.noseTip?.x || 0, landmarks2.noseTip?.y || 0],
                                 [landmarks2.mouthLeft?.x || 0, landmarks2.mouthLeft?.y || 0],
-                                [landmarks2.mouthRight?.x || 0, landmarks2.mouthRight?.y || 0]
+                                [landmarks2.mouthRight?.x || 0, landmarks2.mouthRight?.y || 0],
+                                [landmarks2.eyebrowLeftOuter?.x || 0, landmarks2.eyebrowLeftOuter?.y || 0],
+                                [landmarks2.eyebrowRightOuter?.x || 0, landmarks2.eyebrowRightOuter?.y || 0],
+                                [landmarks2.upperLipTop?.x || 0, landmarks2.upperLipTop?.y || 0],
+                                [landmarks2.underLipBottom?.x || 0, landmarks2.underLipBottom?.y || 0]
                             ];
                             
                             // 2. Normalizar las coordenadas para que sean independientes del tamaño de la imagen
@@ -659,30 +666,36 @@ document.addEventListener('DOMContentLoaded', function() {
                             const avgDistance = distances.reduce((sum, d) => sum + d, 0) / distances.length;
                             
                             // Convertir distancia a similitud (menor distancia = mayor similitud)
-                            const landmarkSimilarity = Math.max(0, 1 - avgDistance);
+                            // Aplicar una función exponencial para penalizar más las diferencias
+                            const landmarkSimilarity = Math.max(0, 1 - (avgDistance * 2));
                             
-                            // Verificar la calidad para reconocimiento si está disponible
-                            let qualitySimilarity = 1.0;
+                            // Verificar la orientación de la cabeza si está disponible
+                            let headPoseSimilarity = 1.0;
                             if (face1.faceAttributes && face2.faceAttributes) {
-                                const quality1 = face1.faceAttributes.qualityForRecognition || 'medium';
-                                const quality2 = face2.faceAttributes.qualityForRecognition || 'medium';
+                                const headPose1 = face1.faceAttributes.headPose;
+                                const headPose2 = face2.faceAttributes.headPose;
                                 
-                                // Penalizar si alguna de las imágenes tiene baja calidad
-                                if (quality1 === 'low' || quality2 === 'low') {
-                                    qualitySimilarity = 0.7;
+                                if (headPose1 && headPose2) {
+                                    // Calcular la diferencia en la orientación de la cabeza
+                                    const yawDiff = Math.abs(headPose1.yaw - headPose2.yaw);
+                                    const pitchDiff = Math.abs(headPose1.pitch - headPose2.pitch);
+                                    const rollDiff = Math.abs(headPose1.roll - headPose2.roll);
+                                    
+                                    // Penalizar si hay diferencias grandes en la orientación
+                                    headPoseSimilarity = Math.max(0, 1 - (yawDiff + pitchDiff + rollDiff) / 60);
                                 }
                             }
                             
                             // Calcular la similitud final
-                            const similarityScore = landmarkSimilarity * 0.8 + qualitySimilarity * 0.2;
+                            const similarityScore = landmarkSimilarity * 0.8 + headPoseSimilarity * 0.2;
                             
-                            // Aplicar umbrales equilibrados
-                            const isIdentical = similarityScore > 0.7;
-                            const verified = similarityScore > 0.8;
+                            // Aplicar umbrales mucho más estrictos
+                            const isIdentical = similarityScore > 0.85;  // Aumentado de 0.7 a 0.85
+                            const verified = similarityScore > 0.92;  // Aumentado de 0.8 a 0.92
                             
                             console.log("Face comparison details (landmark-based):");
                             console.log(`- Landmark similarity: ${landmarkSimilarity.toFixed(4)}`);
-                            console.log(`- Quality similarity: ${qualitySimilarity.toFixed(4)}`);
+                            console.log(`- Head pose similarity: ${headPoseSimilarity.toFixed(4)}`);
                             console.log(`- Overall similarity score: ${similarityScore.toFixed(4)}`);
                             console.log(`- Is same person: ${isIdentical}`);
                             console.log(`- Verified: ${verified}`);
@@ -705,12 +718,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     const ratio1 = rect1.width / Math.max(rect1.height, 1);
                     const ratio2 = rect2.width / Math.max(rect2.height, 1);
                     
-                    // Calcular la diferencia de proporciones (ajustada para ser más permisiva)
+                    // Calcular la diferencia de proporciones (más estricta)
                     const ratioDiff = Math.abs(ratio1 - ratio2);
                     
                     // Calcular puntuación de similitud basada en múltiples factores
-                    // 1. Similitud de proporción facial (más permisiva)
-                    const proportionSimilarity = Math.max(0, 1 - (ratioDiff * 1.5)); // Menos sensible a diferencias
+                    // 1. Similitud de proporción facial (más estricta)
+                    const proportionSimilarity = Math.max(0, 1 - (ratioDiff * 3)); // Más sensible a diferencias
                     
                     // 2. Diferencia en el tamaño relativo de los rostros
                     const size1 = rect1.width * rect1.height;
@@ -720,11 +733,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Combinar factores con diferentes pesos
                     // Damos más importancia a la proporción facial
-                    const similarityScore = (proportionSimilarity * 0.6) + (sizeSimilarity * 0.4);
+                    const similarityScore = (proportionSimilarity * 0.7) + (sizeSimilarity * 0.3);
                     
-                    // Aplicar umbrales equilibrados
-                    const isIdentical = similarityScore > 0.75; // Bajamos de 0.85 a 0.75
-                    const verified = similarityScore > 0.82; // Bajamos de 0.92 a 0.82
+                    // Aplicar umbrales más estrictos
+                    const isIdentical = similarityScore > 0.85; // Aumentado de 0.75 a 0.85
+                    const verified = similarityScore > 0.92; // Aumentado de 0.82 a 0.92
                     
                     console.log("Face comparison details (rectangle-based):");
                     console.log(`- Proportion similarity: ${proportionSimilarity.toFixed(4)}`);

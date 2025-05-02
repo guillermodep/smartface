@@ -214,26 +214,54 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Función para verificar identidad
     function verifyIdentity() {
+        // Mostrar cargando
         loadingOverlay.style.display = 'flex';
         resultContainer.style.display = 'none';
         
+        console.log('Verificando imágenes disponibles:');
+        console.log('ID Image:', idImageFile);
+        console.log('Selfie Image:', selfieImageFile);
+        
+        // Validar que ambas imágenes estén presentes
+        if (!idImageFile || !selfieImageFile) {
+            showError('Por favor, seleccione tanto la imagen de identificación como la selfie.');
+            loadingOverlay.style.display = 'none';
+            return;
+        }
+        
+        // Crear FormData para enviar las imágenes
         const formData = new FormData();
         formData.append('id_image', idImageFile);
         formData.append('selfie_image', selfieImageFile);
         
+        // Enviar solicitud al servidor
         fetch('/detect', {
             method: 'POST',
             body: formData
         })
-        .then(response => response.json())
+        .then(response => {
+            console.log('Respuesta del servidor:', response);
+            console.log('Status:', response.status);
+            console.log('Status Text:', response.statusText);
+            
+            // Si la respuesta no es exitosa, convertirla a JSON para mostrar el error
+            if (!response.ok) {
+                return response.json().then(errorData => {
+                    throw new Error(errorData.error || 'Error en la verificación');
+                });
+            }
+            
+            return response.json();
+        })
         .then(data => {
+            console.log('Datos de verificación:', data);
             loadingOverlay.style.display = 'none';
             displayResults(data);
         })
         .catch(error => {
-            console.error('Error:', error);
+            console.error('Error en la verificación:', error);
             loadingOverlay.style.display = 'none';
-            displayError('Ocurrió un error durante la verificación. Por favor, intente nuevamente.');
+            showError(error.message || 'Error en el proceso de verificación');
         });
     }
     
@@ -279,6 +307,20 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Función para mostrar error
     function displayError(message) {
+        resultContainer.style.display = 'block';
+        resultAlert.className = 'alert alert-danger';
+        resultTitle.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i> Error';
+        resultMessage.textContent = message;
+        document.getElementById('result-details').style.display = 'none';
+        
+        // Animar entrada de resultados
+        setTimeout(() => {
+            resultAlert.classList.add('animate-in');
+        }, 100);
+    }
+    
+    // Función para mostrar error
+    function showError(message) {
         resultContainer.style.display = 'block';
         resultAlert.className = 'alert alert-danger';
         resultTitle.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i> Error';

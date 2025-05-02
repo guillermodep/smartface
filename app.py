@@ -69,27 +69,85 @@ def index():
 @app.route('/detect', methods=['POST'])
 @login_required
 def detect_faces():
-    # Get ID image and selfie image from request
-    id_image = request.files.get('id_image')
-    selfie_image = request.files.get('selfie_image')
-    
-    if not id_image or not selfie_image:
-        return jsonify({'error': 'Both ID image and selfie are required'}), 400
-    
-    # Process ID image
-    id_face = detect_face(id_image)
-    if not id_face:
-        return jsonify({'error': 'No face detected in ID image'}), 400
-    
-    # Process selfie image
-    selfie_face = detect_face(selfie_image)
-    if not selfie_face:
-        return jsonify({'error': 'No face detected in selfie image'}), 400
-    
-    # Compare faces using data from Azure Face API
-    verification_result = compare_faces(id_face, selfie_face)
-    
-    return jsonify(verification_result)
+    try:
+        # Get ID image and selfie image from request
+        id_image = request.files.get('id_image')
+        selfie_image = request.files.get('selfie_image')
+        
+        print(f"Received request with id_image: {id_image.filename if id_image else None}")
+        print(f"Received request with selfie_image: {selfie_image.filename if selfie_image else None}")
+        
+        if not id_image or not selfie_image:
+            error_msg = 'Both ID image and selfie are required'
+            print(error_msg)
+            return jsonify({'error': error_msg}), 400
+        
+        # Verificar el contenido de las imágenes
+        id_image.seek(0)
+        id_data = id_image.read()
+        id_image.seek(0)  # Rebobinar para uso posterior
+        
+        selfie_image.seek(0)
+        selfie_data = selfie_image.read()
+        selfie_image.seek(0)  # Rebobinar para uso posterior
+        
+        print(f"ID image size: {len(id_data)} bytes")
+        print(f"Selfie image size: {len(selfie_data)} bytes")
+        
+        if len(id_data) == 0:
+            error_msg = 'ID image is empty'
+            print(error_msg)
+            return jsonify({'error': error_msg}), 400
+            
+        if len(selfie_data) == 0:
+            error_msg = 'Selfie image is empty'
+            print(error_msg)
+            return jsonify({'error': error_msg}), 400
+        
+        # Process ID image
+        print("Attempting to detect face in ID image...")
+        id_face = detect_face(id_image)
+        if not id_face:
+            print("No face detected in ID image with standard parameters")
+            # Intentar con parámetros más permisivos para la imagen de ID
+            print("Attempting with more permissive parameters...")
+            id_face = detect_face_permissive(id_image)
+            if not id_face:
+                error_msg = 'No face detected in ID image'
+                print(error_msg)
+                return jsonify({'error': error_msg}), 400
+            print("Face detected in ID image with permissive parameters")
+        else:
+            print("Face detected in ID image with standard parameters")
+        
+        # Process selfie image
+        print("Attempting to detect face in selfie image...")
+        selfie_face = detect_face(selfie_image)
+        if not selfie_face:
+            print("No face detected in selfie image with standard parameters")
+            # Intentar con parámetros más permisivos para la selfie
+            print("Attempting with more permissive parameters...")
+            selfie_face = detect_face_permissive(selfie_image)
+            if not selfie_face:
+                error_msg = 'No face detected in selfie image'
+                print(error_msg)
+                return jsonify({'error': error_msg}), 400
+            print("Face detected in selfie image with permissive parameters")
+        else:
+            print("Face detected in selfie image with standard parameters")
+        
+        # Compare faces using data from Azure Face API
+        print("Comparing faces...")
+        verification_result = compare_faces(id_face, selfie_face)
+        print(f"Verification result: {verification_result}")
+        
+        return jsonify(verification_result)
+    except Exception as e:
+        error_msg = f"Error in face detection process: {str(e)}"
+        print(error_msg)
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': error_msg}), 500
 
 @app.route('/capture', methods=['POST'])
 @login_required
@@ -119,13 +177,59 @@ def detect_face(image_file):
         'Content-Type': 'application/octet-stream'
     }
     
-    # Solicitar atributos específicos que nos ayudarán en la comparación
+    # Solicitar solo atributos básicos que no requieren aprobación especial
     params = {
-        'returnFaceId': 'true',  # Necesitamos el faceId para referencia
+        'returnFaceId': 'false',  # No solicitar ID para evitar restricciones
         'returnFaceLandmarks': 'true',  # Solicitar landmarks para mejor comparación
         'detectionModel': 'detection_03',  # Modelo más preciso
-        'recognitionModel': 'recognition_04',  # Modelo de reconocimiento más reciente
-        'returnFaceAttributes': 'headPose,qualityForRecognition'  # Atributos útiles para comparación
+        'returnFaceAttributes': 'headPose'  # Solo atributos básicos
+    }
+    
+    try:
+        # Asegurarnos de que estamos al inicio del archivo
+        image_file.seek(0)
+        image_data = image_file.read()
+        
+        # Verificar que tenemos datos de imagen
+        if not image_data:
+            print("Error: No image data")
+            return None
+            
+        print(f"Sending request to {FACE_DETECT_URL} with {len(image_data)} bytes")
+        response = requests.post(FACE_DETECT_URL, params=params, headers=headers, data=image_data)
+        
+        # Imprimir información de depuración
+        print(f"Response status: {response.status_code}")
+        print(f"Response headers: {response.headers}")
+        
+        if response.status_code != 200:
+            print(f"Error response: {response.text}")
+            
+        response.raise_for_status()
+        
+        faces = response.json()
+        print(f"Detected {len(faces)} faces")
+        if faces and len(faces) > 0:
+            print(f"Face details: {faces[0]}")
+            return faces[0]  # Devolver la información del primer rostro detectado
+        return None
+    except Exception as e:
+        print(f"Error detecting face: {str(e)}")
+        return None
+
+def detect_face_permissive(image_file):
+    """Detect faces in an image and return the face information using Azure Face API with more permissive parameters"""
+    headers = {
+        'Ocp-Apim-Subscription-Key': FACE_API_KEY,
+        'Content-Type': 'application/octet-stream'
+    }
+    
+    # Solicitar solo atributos básicos que no requieren aprobación especial
+    params = {
+        'returnFaceId': 'false',  # No solicitar ID para evitar restricciones
+        'returnFaceLandmarks': 'true',  # Solicitar landmarks para mejor comparación
+        'detectionModel': 'detection_02',  # Modelo menos preciso pero más permisivo
+        'returnFaceAttributes': 'headPose'  # Solo atributos básicos
     }
     
     try:
@@ -179,7 +283,11 @@ def compare_faces(face1, face2):
                     (landmarks1.get('pupilRight', {}).get('x', 0), landmarks1.get('pupilRight', {}).get('y', 0)),
                     (landmarks1.get('noseTip', {}).get('x', 0), landmarks1.get('noseTip', {}).get('y', 0)),
                     (landmarks1.get('mouthLeft', {}).get('x', 0), landmarks1.get('mouthLeft', {}).get('y', 0)),
-                    (landmarks1.get('mouthRight', {}).get('x', 0), landmarks1.get('mouthRight', {}).get('y', 0))
+                    (landmarks1.get('mouthRight', {}).get('x', 0), landmarks1.get('mouthRight', {}).get('y', 0)),
+                    (landmarks1.get('eyebrowLeftOuter', {}).get('x', 0), landmarks1.get('eyebrowLeftOuter', {}).get('y', 0)),
+                    (landmarks1.get('eyebrowRightOuter', {}).get('x', 0), landmarks1.get('eyebrowRightOuter', {}).get('y', 0)),
+                    (landmarks1.get('upperLipTop', {}).get('x', 0), landmarks1.get('upperLipTop', {}).get('y', 0)),
+                    (landmarks1.get('underLipBottom', {}).get('x', 0), landmarks1.get('underLipBottom', {}).get('y', 0))
                 ]
                 
                 key_points2 = [
@@ -187,7 +295,11 @@ def compare_faces(face1, face2):
                     (landmarks2.get('pupilRight', {}).get('x', 0), landmarks2.get('pupilRight', {}).get('y', 0)),
                     (landmarks2.get('noseTip', {}).get('x', 0), landmarks2.get('noseTip', {}).get('y', 0)),
                     (landmarks2.get('mouthLeft', {}).get('x', 0), landmarks2.get('mouthLeft', {}).get('y', 0)),
-                    (landmarks2.get('mouthRight', {}).get('x', 0), landmarks2.get('mouthRight', {}).get('y', 0))
+                    (landmarks2.get('mouthRight', {}).get('x', 0), landmarks2.get('mouthRight', {}).get('y', 0)),
+                    (landmarks2.get('eyebrowLeftOuter', {}).get('x', 0), landmarks2.get('eyebrowLeftOuter', {}).get('y', 0)),
+                    (landmarks2.get('eyebrowRightOuter', {}).get('x', 0), landmarks2.get('eyebrowRightOuter', {}).get('y', 0)),
+                    (landmarks2.get('upperLipTop', {}).get('x', 0), landmarks2.get('upperLipTop', {}).get('y', 0)),
+                    (landmarks2.get('underLipBottom', {}).get('x', 0), landmarks2.get('underLipBottom', {}).get('y', 0))
                 ]
                 
                 # 2. Normalizar las coordenadas para que sean independientes del tamaño de la imagen
@@ -214,28 +326,34 @@ def compare_faces(face1, face2):
                 avg_distance = sum(distances) / len(distances)
                 
                 # Convertir distancia a similitud (menor distancia = mayor similitud)
-                landmark_similarity = max(0, 1 - avg_distance)
+                # Aplicar una función exponencial para penalizar más las diferencias
+                landmark_similarity = max(0, 1 - (avg_distance * 2))
                 
-                # Verificar la calidad para reconocimiento si está disponible
-                quality_similarity = 1.0
+                # Verificar la orientación de la cabeza si está disponible
+                head_pose_similarity = 1.0
                 if 'faceAttributes' in face1 and 'faceAttributes' in face2:
-                    quality1 = face1.get('faceAttributes', {}).get('qualityForRecognition', 'medium')
-                    quality2 = face2.get('faceAttributes', {}).get('qualityForRecognition', 'medium')
+                    headPose1 = face1.get('faceAttributes', {}).get('headPose', {})
+                    headPose2 = face2.get('faceAttributes', {}).get('headPose', {})
                     
-                    # Penalizar si alguna de las imágenes tiene baja calidad
-                    if quality1 == 'low' or quality2 == 'low':
-                        quality_similarity = 0.7
-                    
-                # Calcular la similitud final
-                similarity_score = landmark_similarity * 0.8 + quality_similarity * 0.2
+                    if headPose1 and headPose2:
+                        # Calcular la diferencia en la orientación de la cabeza
+                        yaw_diff = abs(headPose1.get('yaw', 0) - headPose2.get('yaw', 0))
+                        pitch_diff = abs(headPose1.get('pitch', 0) - headPose2.get('pitch', 0))
+                        roll_diff = abs(headPose1.get('roll', 0) - headPose2.get('roll', 0))
+                        
+                        # Penalizar si hay diferencias grandes en la orientación
+                        head_pose_similarity = max(0, 1 - (yaw_diff + pitch_diff + roll_diff) / 60)
                 
-                # Aplicar umbrales equilibrados
-                is_same_person = similarity_score > 0.7
-                verified = similarity_score > 0.8
+                # Calcular la similitud final
+                similarity_score = landmark_similarity * 0.8 + head_pose_similarity * 0.2
+                
+                # Aplicar umbrales mucho más estrictos
+                is_same_person = similarity_score > 0.85  # Aumentado de 0.7 a 0.85
+                verified = similarity_score > 0.92  # Aumentado de 0.8 a 0.92
                 
                 print(f"Face comparison details (landmark-based):")
                 print(f"- Landmark similarity: {landmark_similarity:.4f}")
-                print(f"- Quality similarity: {quality_similarity:.4f}")
+                print(f"- Head pose similarity: {head_pose_similarity:.4f}")
                 print(f"- Overall similarity score: {similarity_score:.4f}")
                 print(f"- Is same person: {is_same_person}")
                 print(f"- Verified: {verified}")
@@ -256,12 +374,12 @@ def compare_faces(face1, face2):
         ratio1 = rect1.get('width', 1) / max(rect1.get('height', 1), 1)
         ratio2 = rect2.get('width', 1) / max(rect2.get('height', 1), 1)
         
-        # Calcular la diferencia de proporciones (ajustada para ser más permisiva)
+        # Calcular la diferencia de proporciones (más estricta)
         ratio_diff = abs(ratio1 - ratio2)
         
         # Calcular puntuación de similitud basada en múltiples factores
-        # 1. Similitud de proporción facial (más permisiva)
-        proportion_similarity = max(0, 1 - (ratio_diff * 1.5))  # Menos sensible a diferencias
+        # 1. Similitud de proporción facial (más estricta)
+        proportion_similarity = max(0, 1 - (ratio_diff * 3))  # Más sensible a diferencias
         
         # 2. Diferencia en el tamaño relativo de los rostros
         size1 = rect1.get('width', 1) * rect1.get('height', 1)
@@ -271,11 +389,11 @@ def compare_faces(face1, face2):
         
         # Combinar factores con diferentes pesos
         # Damos más importancia a la proporción facial
-        similarity_score = (proportion_similarity * 0.6) + (size_similarity * 0.4)
+        similarity_score = (proportion_similarity * 0.7) + (size_similarity * 0.3)
         
-        # Aplicar umbrales equilibrados
-        is_same_person = similarity_score > 0.75  # Bajamos de 0.85 a 0.75
-        verified = similarity_score > 0.82  # Bajamos de 0.92 a 0.82
+        # Aplicar umbrales más estrictos
+        is_same_person = similarity_score > 0.85  # Aumentado de 0.75 a 0.85
+        verified = similarity_score > 0.92  # Aumentado de 0.82 a 0.92
         
         print(f"Face comparison details (rectangle-based):")
         print(f"- Proportion similarity: {proportion_similarity:.4f}")
