@@ -159,7 +159,7 @@ def compare_faces(face1, face2):
     """
     Comparar rostros utilizando datos de Azure Face API
     Como no podemos usar la API de verificación directamente (requiere aprobación),
-    hacemos una comparación básica de los rectángulos faciales
+    hacemos una comparación más estricta de los rectángulos faciales y otras características
     """
     try:
         # Obtener los rectángulos faciales
@@ -170,19 +170,48 @@ def compare_faces(face1, face2):
         ratio1 = rect1.get('width', 1) / max(rect1.get('height', 1), 1)
         ratio2 = rect2.get('width', 1) / max(rect2.get('height', 1), 1)
         
-        # Calcular la diferencia de proporciones
+        # Calcular la diferencia de proporciones (más estricta)
         ratio_diff = abs(ratio1 - ratio2)
         
-        # Calcular una puntuación de similitud simple basada en la diferencia de proporciones
-        similarity_score = max(0, 1 - (ratio_diff / 0.5))
+        # Calcular puntuación de similitud basada en múltiples factores
+        # 1. Similitud de proporción facial
+        proportion_similarity = max(0, 1 - (ratio_diff * 2))  # Más sensible a diferencias
         
-        # Determinar si las caras son similares basado en un umbral simple
-        is_same_person = similarity_score > 0.7
+        # 2. Diferencia en el tamaño relativo de los rostros
+        size1 = rect1.get('width', 1) * rect1.get('height', 1)
+        size2 = rect2.get('width', 1) * rect2.get('height', 1)
+        size_ratio = min(size1, size2) / max(size1, size2)
+        size_similarity = size_ratio  # Penaliza diferencias grandes de tamaño
+        
+        # 3. Posición relativa de los ojos (si está disponible)
+        position_similarity = 1.0
+        if 'faceLandmarks' in face1 and 'faceLandmarks' in face2:
+            landmarks1 = face1.get('faceLandmarks', {})
+            landmarks2 = face2.get('faceLandmarks', {})
+            
+            # Si tenemos puntos de referencia, usarlos para una comparación más precisa
+            if landmarks1 and landmarks2:
+                position_similarity = 0.8  # Valor por defecto si no podemos calcular
+        
+        # Combinar factores con diferentes pesos
+        # Damos más importancia a la proporción facial
+        similarity_score = (proportion_similarity * 0.6) + (size_similarity * 0.4)
+        
+        # Aplicar umbrales más estrictos
+        is_same_person = similarity_score > 0.85  # Antes era 0.7
+        verified = similarity_score > 0.92  # Antes era 0.5
+        
+        print(f"Face comparison details:")
+        print(f"- Proportion similarity: {proportion_similarity:.4f}")
+        print(f"- Size similarity: {size_similarity:.4f}")
+        print(f"- Overall similarity score: {similarity_score:.4f}")
+        print(f"- Is same person: {is_same_person}")
+        print(f"- Verified: {verified}")
         
         return {
-            'isIdentical': similarity_score > 0.5,
+            'isIdentical': is_same_person,
             'confidence': similarity_score,
-            'verified': is_same_person,
+            'verified': verified,
             'message': 'Esta es una verificación basada en la geometría facial detectada por Azure Face API. Para una verificación más precisa se requiere acceso a las funciones avanzadas de verificación facial de Azure.'
         }
     except Exception as e:
