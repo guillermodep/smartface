@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             </div>
                             
                             <div class="login-footer">
-                                <p>SmartFace © 2025 Desarrollado por Smart Vision Team</p>
+                                <p>SmartFace 2025 Desarrollado por Smart Vision Team</p>
                             </div>
                         </div>
                     </div>
@@ -283,7 +283,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                     
                     <footer class="text-center text-muted py-4">
-                        <p><small>SmartFace © 2025 Desarrollado por Smart Vision Team</small></p>
+                        <p><small>SmartFace 2025 Desarrollado por Smart Vision Team</small></p>
                     </footer>
                     
                     <div id="loading-overlay" style="display: none;">
@@ -514,7 +514,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         isIdentical: isIdentical,
                         confidence: confidence,
                         verified: verified,
-                        message: 'Esta es una verificación simulada para la demo. En un entorno real, se utilizaría la API de Azure Face.'
+                        message: 'Nota: Esta es una demostración que utiliza un algoritmo de simulación. En un entorno de producción, se utilizaría la API de Azure Face para una verificación biométrica precisa.'
                     });
                 }, 2000);
             }
@@ -538,7 +538,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else if (data.isIdentical) {
                     resultAlert.className = 'alert alert-warning';
                     resultTitle.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i> Verificación Parcial';
-                    resultMessage.textContent = 'Las imágenes parecen ser de la misma persona, pero el nivel de confianza es bajo.';
+                    resultMessage.textContent = 'Se ha detectado similitud entre las imágenes, pero el nivel de confianza no es suficiente para una verificación completa. Se recomienda intentar con una imagen de mejor calidad.';
                 } else {
                     resultAlert.className = 'alert alert-danger';
                     resultTitle.innerHTML = '<i class="fas fa-times-circle me-2"></i> Verificación Fallida';
